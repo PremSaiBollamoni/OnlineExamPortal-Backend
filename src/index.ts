@@ -23,22 +23,26 @@ dotenv.config();
 
 const app = express();
 
-// Middleware to handle CORS preflight
+// CORS middleware - must be first!
 app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  // Only allow requests from our frontend domain
-  if (origin === 'https://cutmap.netlify.app') {
-    res.setHeader('Access-Control-Allow-Origin', origin);
+  const allowedOrigin = 'https://cutmap.netlify.app';
+  const requestOrigin = req.headers.origin;
+
+  // Only allow the specific origin
+  if (requestOrigin === allowedOrigin) {
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
     res.setHeader('Access-Control-Expose-Headers', 'set-cookie');
+
+    // Handle preflight
+    if (req.method === 'OPTIONS') {
+      res.status(204).end();
+      return;
+    }
   }
-  
-  // Handle preflight
-  if (req.method === 'OPTIONS') {
-    return res.status(204).end();
-  }
+
   next();
 });
 
