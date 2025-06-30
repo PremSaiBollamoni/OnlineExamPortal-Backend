@@ -22,41 +22,38 @@ import subjectRoutes from './routes/subject';
 dotenv.config();
 
 const app = express();
-
-// CORS configuration
-const corsOptions = {
-  origin: 'https://cutmap.netlify.app',
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: [
-    'Content-Type',
-    'Authorization',
-    'Accept',
-    'Origin',
-    'X-Requested-With'
-  ],
-  exposedHeaders: ['set-cookie'],
-  preflightContinue: false,
-  optionsSuccessStatus: 204
-};
-
-// Apply CORS middleware
-app.use(cors(corsOptions));
-
-// Handle preflight requests explicitly
-app.options('*', cors(corsOptions));
-
 const httpServer = createServer(app);
 
-// Configure Socket.IO with same CORS settings
-const io = new Server(httpServer, {
-  cors: corsOptions
+// CORS must be first
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', 'https://cutmap.netlify.app');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  
+  // Handle preflight
+  if (req.method === 'OPTIONS') {
+    res.header('Access-Control-Max-Age', '86400'); // 24 hours
+    res.status(204).end();
+    return;
+  }
+  
+  next();
 });
 
 // Body parser middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser(process.env.COOKIE_SECRET));
+
+// Configure Socket.IO
+const io = new Server(httpServer, {
+  cors: {
+    origin: 'https://cutmap.netlify.app',
+    credentials: true,
+    methods: ['GET', 'POST']
+  }
+});
 
 // Configure express-fileupload
 app.use(fileUpload({
@@ -80,11 +77,24 @@ app.use(fileUpload({
 
 // Add request logging middleware
 app.use((req, res, next) => {
-  console.log('Request URL:', req.url);
-  console.log('Request method:', req.method);
-  console.log('Request headers:', req.headers);
+  console.log('\n=== Incoming Request ===');
+  console.log('Timestamp:', new Date().toISOString());
+  console.log('Method:', req.method);
+  console.log('URL:', req.url);
   console.log('Origin:', req.headers.origin);
-  if (req.files) console.log('Request files:', req.files);
+  console.log('Headers:', req.headers);
+  next();
+});
+
+// Add response logging middleware
+app.use((req, res, next) => {
+  const originalSend = res.send;
+  res.send = function(...args) {
+    console.log('\n=== Outgoing Response ===');
+    console.log('Status:', res.statusCode);
+    console.log('Headers:', res.getHeaders());
+    return originalSend.apply(res, args);
+  };
   next();
 });
 
@@ -94,7 +104,6 @@ connectDB();
 // Socket.io connection handling
 io.on('connection', (socket) => {
   console.log('A user connected');
-
   socket.on('disconnect', () => {
     console.log('User disconnected');
   });
@@ -114,7 +123,7 @@ app.use('/api/activities', activityRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error(err.stack);
+  console.error('Error:', err.stack);
   res.status(500).json({ message: 'Something went wrong!' });
 });
 
