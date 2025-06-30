@@ -23,29 +23,31 @@ dotenv.config();
 
 const app = express();
 
-// CORS configuration
-const corsOptions = {
-  origin: ['https://cutmap.netlify.app', 'http://localhost:5173'],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
-  exposedHeaders: ['set-cookie'],
-  preflightContinue: false,
-  optionsSuccessStatus: 204
-};
-
-// Apply CORS before other middleware
-app.use(cors(corsOptions));
-
-// Handle preflight requests
-app.options('*', cors(corsOptions));
+// Middleware to handle CORS preflight
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  // Only allow requests from our frontend domain
+  if (origin === 'https://cutmap.netlify.app') {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
+    res.setHeader('Access-Control-Expose-Headers', 'set-cookie');
+  }
+  
+  // Handle preflight
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+  next();
+});
 
 const httpServer = createServer(app);
 
 // Configure Socket.IO with same CORS settings
 const io = new Server(httpServer, {
   cors: {
-    origin: ['https://cutmap.netlify.app', 'http://localhost:5173'],
+    origin: 'https://cutmap.netlify.app',
     credentials: true,
     methods: ['GET', 'POST']
   }
