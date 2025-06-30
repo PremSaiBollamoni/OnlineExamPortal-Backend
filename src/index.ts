@@ -23,14 +23,15 @@ const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: [process.env.BASE_URL || "http://localhost:5173", "http://localhost:8080"],
-    methods: ["GET", "POST"]
+    origin: [process.env.BASE_URL || "http://localhost:5173", "http://localhost:8080", "https://cutmap.netlify.app"],
+    methods: ["GET", "POST"],
+    credentials: true
   }
 });
 
 // Configure CORS first
 app.use(cors({
-  origin: [process.env.BASE_URL || "http://localhost:5173", "http://localhost:8080"],
+  origin: [process.env.BASE_URL || "http://localhost:5173", "http://localhost:8080", "https://cutmap.netlify.app"],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: [
