@@ -21,29 +21,26 @@ dotenv.config();
 
 const app = express();
 
-// Enable pre-flight requests for all routes
-app.options('*', cors({
+// CORS configuration
+const corsOptions = {
   origin: 'https://cutmap.netlify.app',
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
-}));
+  methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  optionsSuccessStatus: 204
+};
 
-// CORS middleware for all other requests
-app.use(cors({
-  origin: 'https://cutmap.netlify.app',
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
-}));
+// Apply CORS configuration
+app.use(cors(corsOptions));
 
 const httpServer = createServer(app);
 
+// Configure Socket.IO with same CORS settings
 const io = new Server(httpServer, {
   cors: {
     origin: 'https://cutmap.netlify.app',
     credentials: true,
-    methods: ["GET", "POST"]
+    methods: ['GET', 'POST']
   }
 });
 
