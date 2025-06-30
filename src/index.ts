@@ -1,7 +1,9 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import cors from 'cors';
-import { createServer } from 'http';
+import cookieParser from 'cookie-parser';
 import { Server } from 'socket.io';
+import { createServer } from 'http';
 import fileUpload from 'express-fileupload';
 import * as path from 'path';
 import * as os from 'os';
@@ -23,22 +25,27 @@ const app = express();
 
 // CORS configuration
 const corsOptions = {
-  origin: 'https://cutmap.netlify.app',
+  origin: ['https://cutmap.netlify.app', 'http://localhost:5173'],
   credentials: true,
-  methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  exposedHeaders: ['set-cookie'],
+  preflightContinue: false,
   optionsSuccessStatus: 204
 };
 
-// Apply CORS configuration
+// Apply CORS before other middleware
 app.use(cors(corsOptions));
+
+// Handle preflight requests
+app.options('*', cors(corsOptions));
 
 const httpServer = createServer(app);
 
 // Configure Socket.IO with same CORS settings
 const io = new Server(httpServer, {
   cors: {
-    origin: 'https://cutmap.netlify.app',
+    origin: ['https://cutmap.netlify.app', 'http://localhost:5173'],
     credentials: true,
     methods: ['GET', 'POST']
   }
@@ -47,6 +54,7 @@ const io = new Server(httpServer, {
 // Body parser middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser(process.env.COOKIE_SECRET));
 
 // Configure express-fileupload
 app.use(fileUpload({
@@ -96,11 +104,17 @@ app.set('io', io);
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/subjects', subjectRoutes);
 app.use('/api/exam-papers', examPaperRoutes);
 app.use('/api/submissions', submissionRoutes);
 app.use('/api/results', resultRoutes);
 app.use('/api/activities', activityRoutes);
-app.use('/api/subjects', subjectRoutes);
+
+// Error handling middleware
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error(err.stack);
+  res.status(500).json({ message: 'Something went wrong!' });
+});
 
 const PORT = process.env.PORT || 5000;
 
