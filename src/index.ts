@@ -19,45 +19,24 @@ import subjectRoutes from './routes/subject';
 // Load env vars
 dotenv.config();
 
-// Define allowed origins
-const allowedOrigins = ['https://cutmap.netlify.app', 'http://localhost:5173', 'http://localhost:8080'];
-
 const app = express();
 const httpServer = createServer(app);
+
+// Configure CORS first - before creating Socket.IO server
+app.use(cors({
+  origin: 'https://cutmap.netlify.app',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
+}));
+
 const io = new Server(httpServer, {
   cors: {
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
+    origin: 'https://cutmap.netlify.app',
     credentials: true,
     methods: ["GET", "POST"]
   }
 });
-
-// Configure CORS first
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: [
-    'Content-Type',
-    'Authorization',
-    'Accept',
-    'Cache-Control',
-    'Pragma',
-    'Content-Length'
-  ]
-}));
 
 // Body parser middleware
 app.use(express.json());
