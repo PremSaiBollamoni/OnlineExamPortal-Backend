@@ -20,15 +20,23 @@ import subjectRoutes from './routes/subject';
 dotenv.config();
 
 const app = express();
-const httpServer = createServer(app);
 
-// Configure CORS first - before creating Socket.IO server
-app.use(cors({
-  origin: 'https://cutmap.netlify.app',
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
-}));
+// CORS handling middleware - must be first
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', 'https://cutmap.netlify.app');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+  next();
+});
+
+const httpServer = createServer(app);
 
 const io = new Server(httpServer, {
   cors: {
@@ -67,6 +75,7 @@ app.use((req, res, next) => {
   console.log('Request URL:', req.url);
   console.log('Request method:', req.method);
   console.log('Request headers:', req.headers);
+  console.log('Origin:', req.headers.origin);
   if (req.files) console.log('Request files:', req.files);
   next();
 });
