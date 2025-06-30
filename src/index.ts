@@ -23,38 +23,23 @@ dotenv.config();
 
 const app = express();
 
-// CORS middleware - must be first!
-app.use((req, res, next) => {
-  const allowedOrigin = 'https://cutmap.netlify.app';
-  const requestOrigin = req.headers.origin;
+// CORS configuration
+const corsOptions = {
+  origin: 'https://cutmap.netlify.app',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  maxAge: 600 // Cache preflight requests for 10 minutes
+};
 
-  // Only allow the specific origin
-  if (requestOrigin === allowedOrigin) {
-    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
-    res.setHeader('Access-Control-Expose-Headers', 'set-cookie');
-
-    // Handle preflight
-    if (req.method === 'OPTIONS') {
-      res.status(204).end();
-      return;
-    }
-  }
-
-  next();
-});
+// Apply CORS middleware
+app.use(cors(corsOptions));
 
 const httpServer = createServer(app);
 
 // Configure Socket.IO with same CORS settings
 const io = new Server(httpServer, {
-  cors: {
-    origin: 'https://cutmap.netlify.app',
-    credentials: true,
-    methods: ['GET', 'POST']
-  }
+  cors: corsOptions
 });
 
 // Body parser middleware
