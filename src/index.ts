@@ -19,19 +19,34 @@ import subjectRoutes from './routes/subject';
 // Load env vars
 dotenv.config();
 
+// Define allowed origins
+const allowedOrigins = ['https://cutmap.netlify.app', 'http://localhost:5173', 'http://localhost:8080'];
+
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: [process.env.BASE_URL || "http://localhost:5173", "http://localhost:8080", "https://cutmap.netlify.app"],
-    methods: ["GET", "POST"],
-    credentials: true
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    credentials: true,
+    methods: ["GET", "POST"]
   }
 });
 
 // Configure CORS first
 app.use(cors({
-  origin: [process.env.BASE_URL || "http://localhost:5173", "http://localhost:8080", "https://cutmap.netlify.app"],
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: [
