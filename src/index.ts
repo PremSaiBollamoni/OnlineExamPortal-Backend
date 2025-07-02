@@ -24,124 +24,66 @@ dotenv.config();
 const app = express();
 const httpServer = createServer(app);
 
-// Debug logging middleware - Must be first!
+// Simple request logger
 app.use((req, res, next) => {
-  console.log('\n=== New Request Debug Log ===');
-  console.log('Timestamp:', new Date().toISOString());
-  console.log('Request Details:', {
+  console.log('\n🔍 REQUEST:', {
+    timestamp: new Date().toISOString(),
     method: req.method,
-    url: req.url,
-    origin: req.headers.origin,
+    path: req.path,
+    origin: req.headers.origin || 'no origin',
     host: req.headers.host,
-    referer: req.headers.referer,
-    'user-agent': req.headers['user-agent']
   });
-  console.log('Request Headers:', req.headers);
-  
-  // Log request body for non-GET requests
-  if (req.method !== 'GET') {
-    console.log('Request Body:', req.body);
-  }
-
-  // Track response
-  const oldJson = res.json;
-  res.json = function(body) {
-    console.log('Response Body:', body);
-    return oldJson.call(this, body);
-  };
-
-  // Log when response finishes
-  res.on('finish', () => {
-    console.log('\n=== Response Debug Log ===');
-    console.log('Response Status:', res.statusCode);
-    console.log('Response Headers:', res.getHeaders());
-    console.log('=== End Debug Log ===\n');
-  });
-
   next();
 });
 
-// CORS Configuration with debug logging
+// CORS Configuration
 const corsOptions = {
   origin: function (origin: any, callback: any) {
-    console.log('\n=== CORS Debug ===');
-    console.log('Request Origin:', origin);
+    console.log('👉 Checking CORS for origin:', origin);
     
     const allowedOrigins = [
-      process.env.CORS_ORIGIN,
-      process.env.FRONTEND_URL,
       'https://cutmap.netlify.app',
-      ...(process.env.NODE_ENV !== 'production' ? [
-        'http://localhost:8080',
-        'http://localhost:5173',
-        'http://localhost:3000'
-      ] : [])
-    ].filter(Boolean);
+      'http://localhost:8080',
+      'http://localhost:5173'
+    ];
 
-    console.log('Configured Origins:', {
-      CORS_ORIGIN: process.env.CORS_ORIGIN,
-      FRONTEND_URL: process.env.FRONTEND_URL,
-      NODE_ENV: process.env.NODE_ENV,
-      allowedOrigins
-    });
+    console.log('✅ Allowed origins:', allowedOrigins);
 
-    if (!origin) {
-      console.log('No origin provided - allowing request');
+    if (!origin || allowedOrigins.includes(origin)) {
+      console.log('✅ Origin allowed:', origin);
       callback(null, true);
-      return;
+    } else {
+      console.log('❌ Origin rejected:', origin);
+      callback(new Error('CORS not allowed'));
     }
-
-    if (allowedOrigins.includes(origin)) {
-      console.log('Origin is allowed:', origin);
-      callback(null, true);
-      return;
-    }
-
-    console.log('Origin not allowed:', origin);
-    callback(new Error(`Origin ${origin} not allowed by CORS`));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Cookie'],
-  exposedHeaders: ['set-cookie'],
-  maxAge: 86400
 };
 
-// Apply CORS middleware
+// Apply CORS
 app.use(cors(corsOptions));
 
-// Additional headers middleware with debug
+// Response logger
 app.use((req, res, next) => {
-  console.log('\n=== Headers Middleware Debug ===');
-  const origin = req.headers.origin;
-  console.log('Setting headers for origin:', origin);
-
-  if (origin && corsOptions.origin) {
-    (corsOptions.origin as Function)(origin, (error: Error | null, allowed: boolean) => {
-      if (allowed) {
-        console.log('Setting CORS headers for allowed origin');
-        res.setHeader('Access-Control-Allow-Origin', origin);
-        res.setHeader('Access-Control-Allow-Credentials', 'true');
-        res.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cookie');
-        console.log('Headers set:', res.getHeaders());
-      } else {
-        console.log('Origin not allowed, no headers set');
-      }
+  const originalSend = res.send;
+  res.send = function(...args) {
+    console.log('\n📤 RESPONSE:', {
+      status: res.statusCode,
+      headers: res.getHeaders(),
     });
-  } else {
-    console.log('No origin or corsOptions.origin not configured');
-  }
+    return originalSend.apply(res, args);
+  };
   next();
 });
 
-// Handle preflight requests with debug
+// Handle OPTIONS requests
 app.options('*', (req, res) => {
-  console.log('\n=== OPTIONS Request Debug ===');
-  console.log('Handling OPTIONS request for path:', req.path);
-  console.log('Request headers:', req.headers);
+  console.log('👉 OPTIONS request received');
+  console.log('Headers:', req.headers);
   res.status(200).end();
-  console.log('OPTIONS request handled - sent 200 response');
+  console.log('✅ OPTIONS request handled');
 });
 
 // Body parser middleware
@@ -149,14 +91,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser(process.env.COOKIE_SECRET));
 
-// Configure Socket.IO with debug logging
+// Configure Socket.IO
 const io = new Server(httpServer, {
-  cors: {
-    origin: corsOptions.origin,
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Cookie']
-  }
+  cors: corsOptions
 });
 
 // Configure express-fileupload
@@ -179,43 +116,6 @@ app.use(fileUpload({
   defParamCharset: 'utf8'
 }));
 
-// Add request logging middleware
-app.use((req, res, next) => {
-  console.log('\n=== Incoming Request ===');
-  console.log('Timestamp:', new Date().toISOString());
-  console.log('Method:', req.method);
-  console.log('URL:', req.url);
-  console.log('Origin:', req.headers.origin);
-  console.log('Headers:', req.headers);
-  next();
-});
-
-// Add response logging middleware
-app.use((req, res, next) => {
-  const originalSend = res.send;
-  res.send = function(...args) {
-    console.log('\n=== Outgoing Response ===');
-    console.log('Status:', res.statusCode);
-    console.log('Headers:', res.getHeaders());
-    return originalSend.apply(res, args);
-  };
-  next();
-});
-
-// Connect to MongoDB
-connectDB();
-
-// Socket.io connection handling
-io.on('connection', (socket) => {
-  console.log('A user connected');
-  socket.on('disconnect', () => {
-    console.log('User disconnected');
-  });
-});
-
-// Make io accessible to our routes
-app.set('io', io);
-
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -227,12 +127,14 @@ app.use('/api/activities', activityRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('Error:', err.stack);
+  console.error('❌ ERROR:', err.stack);
   res.status(500).json({ message: 'Something went wrong!' });
 });
 
 const PORT = process.env.PORT || 5000;
 
 httpServer.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(`\n🚀 Server is running on port ${PORT}`);
+  console.log('📝 Environment:', process.env.NODE_ENV);
+  console.log('🌐 Frontend URL:', process.env.FRONTEND_URL);
 }); 
