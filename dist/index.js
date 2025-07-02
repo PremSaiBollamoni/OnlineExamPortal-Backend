@@ -16,7 +16,16 @@ const result_1 = __importDefault(require("./routes/result"));
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 // Middleware
-app.use((0, cors_1.default)());
+app.use((0, cors_1.default)({
+    origin: 'https://cutmap.netlify.app',
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Cookie'],
+    exposedHeaders: ['set-cookie'],
+    optionsSuccessStatus: 200,
+    preflightContinue: false,
+    maxAge: 86400
+}));
 app.use(express_1.default.json());
 // Connect to MongoDB
 (0, database_1.default)();
