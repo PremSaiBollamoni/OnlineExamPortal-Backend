@@ -3,12 +3,16 @@ import jwt from 'jsonwebtoken';
 import User from '../models/User';
 import bcrypt from 'bcryptjs';
 
-const JWT_SECRET = 'cutm-exam-portal-secret-key-2024';
+const JWT_SECRET = process.env.JWT_SECRET || 'cutm-exam-portal-secret-key-2024';
 
 const generateToken = (userId: string) => {
-  return jwt.sign({ userId }, process.env.JWT_SECRET || JWT_SECRET, {
+  console.log('\n=== Token Generation Debug ===');
+  console.log('Generating token for userId:', userId);
+  const token = jwt.sign({ userId }, JWT_SECRET, {
     expiresIn: '30d',
   });
+  console.log('Token generated successfully');
+  return token;
 };
 
 export const register = async (req: Request, res: Response) => {
@@ -49,7 +53,7 @@ export const register = async (req: Request, res: Response) => {
 
 export const login = async (req: Request, res: Response) => {
   try {
-    console.log('\n=== Login Controller Start ===');
+    console.log('\n=== Login Attempt Debug ===');
     console.log('Request headers:', {
       origin: req.headers.origin,
       'content-type': req.headers['content-type'],
@@ -60,9 +64,20 @@ export const login = async (req: Request, res: Response) => {
 
     const { email, password } = req.body;
 
+    // Validate input
+    if (!email || !password) {
+      console.log('Login failed: Missing email or password');
+      return res.status(400).json({ message: 'Email and password are required' });
+    }
+
     // Find user
     const user = await User.findOne({ email });
-    console.log('User found:', user ? 'Yes' : 'No');
+    console.log('User lookup result:', user ? {
+      _id: user._id,
+      email: user.email,
+      role: user.role,
+      found: true
+    } : 'User not found');
 
     if (!user) {
       console.log('Login failed: User not found');
@@ -79,30 +94,25 @@ export const login = async (req: Request, res: Response) => {
     }
 
     // Generate token
-    const token = jwt.sign(
-      { userId: user._id },
-      process.env.JWT_SECRET!,
-      { expiresIn: '24h' }
-    );
+    const token = generateToken(user._id);
     console.log('Token generated:', token ? 'Yes' : 'No');
 
     // Set cookie options
     const cookieOptions = {
       httpOnly: true,
-      secure: true,
-      sameSite: 'none' as const,
-      maxAge: 24 * 60 * 60 * 1000,
+      secure: true, // Always use secure cookies
+      sameSite: 'none' as const, // Required for cross-origin
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
       path: '/'
     };
     console.log('Cookie options:', cookieOptions);
 
-    // Set cookie and send response
+    // Set cookie and prepare response
     res.cookie('token', token, cookieOptions);
-
-    console.log('=== Login Success ===');
-    console.log('Response headers to be sent:', res.getHeaders());
-
-    return res.status(200).json({
+    
+    console.log('Response headers before send:', res.getHeaders());
+    
+    const response = {
       user: {
         _id: user._id,
         name: user.name,
@@ -110,10 +120,15 @@ export const login = async (req: Request, res: Response) => {
         role: user.role
       },
       token
-    });
+    };
+    
+    console.log('Sending response:', { ...response, token: '[HIDDEN]' });
+    
+    return res.status(200).json(response);
   } catch (error) {
-    console.error('=== Login Error ===');
+    console.error('\n=== Login Error Debug ===');
     console.error('Error details:', error);
-    return res.status(500).json({ message: 'Server error' });
+    console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack trace');
+    return res.status(500).json({ message: 'Server error during login' });
   }
 }; 
