@@ -21,25 +21,33 @@ import subjectRoutes from './routes/subject';
 // Load env vars
 dotenv.config();
 
+// Custom logging function
+const log = (message: string) => {
+  const timestamp = new Date().toISOString();
+  process.stdout.write(`[${timestamp}] ${message}\n`);
+};
+
 const app = express();
 const httpServer = createServer(app);
 
-// Simple request logger
+// Request logger
 app.use((req, res, next) => {
-  console.log('\n🔍 REQUEST:', {
-    timestamp: new Date().toISOString(),
-    method: req.method,
-    path: req.path,
-    origin: req.headers.origin || 'no origin',
-    host: req.headers.host,
-  });
+  log(`
+==================================
+NEW REQUEST
+Method: ${req.method}
+Path: ${req.path}
+Origin: ${req.headers.origin || 'no origin'}
+Headers: ${JSON.stringify(req.headers, null, 2)}
+==================================
+`);
   next();
 });
 
 // CORS Configuration
 const corsOptions = {
   origin: function (origin: any, callback: any) {
-    console.log('👉 Checking CORS for origin:', origin);
+    log(`CORS Check - Origin: ${origin}`);
     
     const allowedOrigins = [
       'https://cutmap.netlify.app',
@@ -47,13 +55,13 @@ const corsOptions = {
       'http://localhost:5173'
     ];
 
-    console.log('✅ Allowed origins:', allowedOrigins);
+    log(`Allowed Origins: ${allowedOrigins.join(', ')}`);
 
     if (!origin || allowedOrigins.includes(origin)) {
-      console.log('✅ Origin allowed:', origin);
+      log(`CORS - Origin Allowed: ${origin}`);
       callback(null, true);
     } else {
-      console.log('❌ Origin rejected:', origin);
+      log(`CORS - Origin Rejected: ${origin}`);
       callback(new Error('CORS not allowed'));
     }
   },
@@ -69,10 +77,13 @@ app.use(cors(corsOptions));
 app.use((req, res, next) => {
   const originalSend = res.send;
   res.send = function(...args) {
-    console.log('\n📤 RESPONSE:', {
-      status: res.statusCode,
-      headers: res.getHeaders(),
-    });
+    log(`
+==================================
+RESPONSE
+Status: ${res.statusCode}
+Headers: ${JSON.stringify(res.getHeaders(), null, 2)}
+==================================
+`);
     return originalSend.apply(res, args);
   };
   next();
@@ -80,10 +91,15 @@ app.use((req, res, next) => {
 
 // Handle OPTIONS requests
 app.options('*', (req, res) => {
-  console.log('👉 OPTIONS request received');
-  console.log('Headers:', req.headers);
+  log(`
+==================================
+OPTIONS REQUEST
+Path: ${req.path}
+Headers: ${JSON.stringify(req.headers, null, 2)}
+==================================
+`);
   res.status(200).end();
-  console.log('✅ OPTIONS request handled');
+  log('OPTIONS request handled - Status 200');
 });
 
 // Body parser middleware
@@ -127,14 +143,24 @@ app.use('/api/activities', activityRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('❌ ERROR:', err.stack);
+  log(`
+==================================
+ERROR
+${err.stack}
+==================================
+`);
   res.status(500).json({ message: 'Something went wrong!' });
 });
 
 const PORT = process.env.PORT || 5000;
 
 httpServer.listen(PORT, () => {
-  console.log(`\n🚀 Server is running on port ${PORT}`);
-  console.log('📝 Environment:', process.env.NODE_ENV);
-  console.log('🌐 Frontend URL:', process.env.FRONTEND_URL);
+  log(`
+==================================
+SERVER STARTED
+Port: ${PORT}
+Environment: ${process.env.NODE_ENV}
+Frontend URL: ${process.env.FRONTEND_URL}
+==================================
+`);
 }); 
