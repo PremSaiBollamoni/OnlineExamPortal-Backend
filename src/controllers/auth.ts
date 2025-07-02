@@ -3,20 +3,12 @@ import jwt from 'jsonwebtoken';
 import User from '../models/User';
 import bcrypt from 'bcryptjs';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'cutm-exam-portal-secret-key-2024';
-
-// Custom logging function
-const log = (message: string) => {
-  const timestamp = new Date().toISOString();
-  process.stdout.write(`[${timestamp}] ${message}\n`);
-};
+const JWT_SECRET = 'cutm-exam-portal-secret-key-2024';
 
 const generateToken = (userId: string) => {
-  log(`Generating token for user: ${userId}`);
-  const token = jwt.sign({ userId }, JWT_SECRET, {
+  return jwt.sign({ userId }, process.env.JWT_SECRET || JWT_SECRET, {
     expiresIn: '30d',
   });
-  return token;
 };
 
 export const register = async (req: Request, res: Response) => {
@@ -57,59 +49,58 @@ export const register = async (req: Request, res: Response) => {
 
 export const login = async (req: Request, res: Response) => {
   try {
-    log(`
-==================================
-LOGIN ATTEMPT
-User: ${req.body.email}
-Origin: ${req.headers.origin}
-Cookies Present: ${!!req.headers.cookie}
-==================================
-`);
+    console.log('\n=== Login Controller Start ===');
+    console.log('Request headers:', {
+      origin: req.headers.origin,
+      'content-type': req.headers['content-type'],
+      cookie: req.headers.cookie,
+      authorization: req.headers.authorization
+    });
+    console.log('Request body:', { ...req.body, password: '[HIDDEN]' });
 
     const { email, password } = req.body;
 
-    // Validate input
-    if (!email || !password) {
-      log('Login failed: Missing credentials');
-      return res.status(400).json({ message: 'Email and password are required' });
-    }
-
     // Find user
     const user = await User.findOne({ email });
+    console.log('User found:', user ? 'Yes' : 'No');
+
     if (!user) {
-      log('Login failed: User not found');
+      console.log('Login failed: User not found');
       return res.status(401).json({ message: 'Invalid credentials' });
     }
-    log(`User found: ${user.email}`);
 
     // Check password
     const isMatch = await bcrypt.compare(password, user.password);
+    console.log('Password match:', isMatch ? 'Yes' : 'No');
+
     if (!isMatch) {
-      log('Login failed: Invalid password');
+      console.log('Login failed: Invalid password');
       return res.status(401).json({ message: 'Invalid credentials' });
     }
-    log('Password verified successfully');
 
     // Generate token
-    const token = generateToken(user._id);
-    log('Token generated successfully');
+    const token = jwt.sign(
+      { userId: user._id },
+      process.env.JWT_SECRET!,
+      { expiresIn: '24h' }
+    );
+    console.log('Token generated:', token ? 'Yes' : 'No');
 
     // Set cookie options
     const cookieOptions = {
       httpOnly: true,
-      secure: true,
-      sameSite: 'none' as const,
-      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-      path: '/'
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' as const : 'lax' as const,
+      maxAge: 24 * 60 * 60 * 1000 // 24 hours
     };
-    log(`Cookie options: ${JSON.stringify(cookieOptions, null, 2)}`);
+    console.log('Cookie options:', cookieOptions);
 
     // Set cookie and send response
     res.cookie('token', token, cookieOptions);
-    log('Cookie set successfully');
-    
-    log(`Response headers: ${JSON.stringify(res.getHeaders(), null, 2)}`);
-    
+
+    console.log('=== Login Success ===');
+    console.log('Response headers to be sent:', res.getHeaders());
+
     return res.status(200).json({
       user: {
         _id: user._id,
@@ -120,12 +111,8 @@ Cookies Present: ${!!req.headers.cookie}
       token
     });
   } catch (error) {
-    log(`
-==================================
-LOGIN ERROR
-${error instanceof Error ? error.stack : 'No stack trace available'}
-==================================
-`);
-    return res.status(500).json({ message: 'Server error during login' });
+    console.error('=== Login Error ===');
+    console.error('Error details:', error);
+    return res.status(500).json({ message: 'Server error' });
   }
 }; 
