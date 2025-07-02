@@ -24,13 +24,30 @@ dotenv.config();
 const app = express();
 const httpServer = createServer(app);
 
-// CORS must be first
-app.use(cors({
-  origin: 'https://cutmap.netlify.app',  // exact origin of your frontend
-  credentials: true,                     // allow cookies/auth headers
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+// CORS middleware at the very top
+app.use((req, res, next) => {
+  const allowedOrigins = ['https://cutmap.netlify.app'];
+  const origin = req.headers.origin;
+
+  if (origin && allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  } else {
+    return res.status(403).send('Origin not allowed by CORS');
+  }
+
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
+  res.header(
+    'Access-Control-Allow-Headers',
+    'Origin, X-Requested-With, Content-Type, Accept, Authorization'
+  );
+
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+
+  next();
+});
 
 // Body parser middleware
 app.use(express.json());
