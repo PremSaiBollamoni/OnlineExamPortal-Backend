@@ -67,7 +67,7 @@ const io = new Server(httpServer, {
       }
     },
     credentials: true,
-    methods: ['GET', 'POST']
+    methods: ['GET', 'POST','PUT', 'PATCH', 'DELETE', 'OPTIONS']
   }
 });
 
