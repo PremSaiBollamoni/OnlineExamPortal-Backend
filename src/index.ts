@@ -21,85 +21,26 @@ import subjectRoutes from './routes/subject';
 // Load env vars
 dotenv.config();
 
-// Custom logging function
-const log = (message: string) => {
-  const timestamp = new Date().toISOString();
-  process.stdout.write(`[${timestamp}] ${message}\n`);
-};
-
 const app = express();
 const httpServer = createServer(app);
 
-// Request logger
+
 app.use((req, res, next) => {
-  log(`
-==================================
-NEW REQUEST
-Method: ${req.method}
-Path: ${req.path}
-Origin: ${req.headers.origin || 'no origin'}
-Headers: ${JSON.stringify(req.headers, null, 2)}
-==================================
-`);
+  const origin = req.headers.origin;
+  const allowedOrigins = ['https://cutmap.netlify.app'];
+
+  if (origin && allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  }
+
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  } 
+
   next();
-});
-
-// CORS Configuration
-const corsOptions = {
-  origin: function (origin: any, callback: any) {
-    log(`CORS Check - Origin: ${origin}`);
-    
-    const allowedOrigins = [
-      'https://cutmap.netlify.app',
-      'http://localhost:8080',
-      'http://localhost:5173'
-    ];
-
-    log(`Allowed Origins: ${allowedOrigins.join(', ')}`);
-
-    if (!origin || allowedOrigins.includes(origin)) {
-      log(`CORS - Origin Allowed: ${origin}`);
-      callback(null, true);
-    } else {
-      log(`CORS - Origin Rejected: ${origin}`);
-      callback(new Error('CORS not allowed'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Cookie'],
-};
-
-// Apply CORS
-app.use(cors(corsOptions));
-
-// Response logger
-app.use((req, res, next) => {
-  const originalSend = res.send;
-  res.send = function(...args) {
-    log(`
-==================================
-RESPONSE
-Status: ${res.statusCode}
-Headers: ${JSON.stringify(res.getHeaders(), null, 2)}
-==================================
-`);
-    return originalSend.apply(res, args);
-  };
-  next();
-});
-
-// Handle OPTIONS requests
-app.options('*', (req, res) => {
-  log(`
-==================================
-OPTIONS REQUEST
-Path: ${req.path}
-Headers: ${JSON.stringify(req.headers, null, 2)}
-==================================
-`);
-  res.status(200).end();
-  log('OPTIONS request handled - Status 200');
 });
 
 // Body parser middleware
@@ -109,7 +50,11 @@ app.use(cookieParser(process.env.COOKIE_SECRET));
 
 // Configure Socket.IO
 const io = new Server(httpServer, {
-  cors: corsOptions
+  cors: {
+    origin: 'https://cutmap.netlify.app',
+    credentials: true,
+    methods: ['GET', 'POST']
+  }
 });
 
 // Configure express-fileupload
@@ -132,6 +77,43 @@ app.use(fileUpload({
   defParamCharset: 'utf8'
 }));
 
+// Add request logging middleware
+app.use((req, res, next) => {
+  console.log('\n=== Incoming Request ===');
+  console.log('Timestamp:', new Date().toISOString());
+  console.log('Method:', req.method);
+  console.log('URL:', req.url);
+  console.log('Origin:', req.headers.origin);
+  console.log('Headers:', req.headers);
+  next();
+});
+
+// Add response logging middleware
+app.use((req, res, next) => {
+  const originalSend = res.send;
+  res.send = function(...args) {
+    console.log('\n=== Outgoing Response ===');
+    console.log('Status:', res.statusCode);
+    console.log('Headers:', res.getHeaders());
+    return originalSend.apply(res, args);
+  };
+  next();
+});
+
+// Connect to MongoDB
+connectDB();
+
+// Socket.io connection handling
+io.on('connection', (socket) => {
+  console.log('A user connected');
+  socket.on('disconnect', () => {
+    console.log('User disconnected');
+  });
+});
+
+// Make io accessible to our routes
+app.set('io', io);
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -143,24 +125,12 @@ app.use('/api/activities', activityRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  log(`
-==================================
-ERROR
-${err.stack}
-==================================
-`);
+  console.error('Error:', err.stack);
   res.status(500).json({ message: 'Something went wrong!' });
 });
 
 const PORT = process.env.PORT || 5000;
 
 httpServer.listen(PORT, () => {
-  log(`
-==================================
-SERVER STARTED
-Port: ${PORT}
-Environment: ${process.env.NODE_ENV}
-Frontend URL: ${process.env.FRONTEND_URL}
-==================================
-`);
+  console.log(`Server is running on port ${PORT}`);
 }); 
