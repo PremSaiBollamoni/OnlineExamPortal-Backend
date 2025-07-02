@@ -24,26 +24,28 @@ dotenv.config();
 const app = express();
 const httpServer = createServer(app);
 
-// CORS middleware at the very top
-app.use((req, res, next) => {
-  const allowedOrigins = ['https://cutmap.netlify.app'];
-  const origin = req.headers.origin;
+// Define allowed origins
+const allowedOrigins = [
+  'https://cutmap.netlify.app',
+  'http://localhost:8080',
+  'http://localhost:5173',
+].filter(Boolean);
 
+// CORS middleware
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  
   if (origin && allowedOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
-  } else {
-    return res.status(403).send('Origin not allowed by CORS');
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
   }
 
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
-  res.header(
-    'Access-Control-Allow-Headers',
-    'Origin, X-Requested-With, Content-Type, Accept, Authorization'
-  );
-
+  // Handle preflight
   if (req.method === 'OPTIONS') {
-    return res.sendStatus(204);
+    return res.status(200).end();
   }
 
   next();
@@ -57,7 +59,13 @@ app.use(cookieParser(process.env.COOKIE_SECRET));
 // Configure Socket.IO
 const io = new Server(httpServer, {
   cors: {
-    origin: 'https://cutmap.netlify.app',
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
     methods: ['GET', 'POST']
   }
