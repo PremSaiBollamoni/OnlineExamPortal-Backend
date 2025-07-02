@@ -24,31 +24,124 @@ dotenv.config();
 const app = express();
 const httpServer = createServer(app);
 
-// Define allowed origins
-const allowedOrigins = [
-  'https://cutmap.netlify.app',
-  'http://localhost:8080',
-  'http://localhost:5173',
-  process.env.FRONTEND_URL,
-].filter(Boolean);
+// Debug logging middleware - Must be first!
+app.use((req, res, next) => {
+  console.log('\n=== New Request Debug Log ===');
+  console.log('Timestamp:', new Date().toISOString());
+  console.log('Request Details:', {
+    method: req.method,
+    url: req.url,
+    origin: req.headers.origin,
+    host: req.headers.host,
+    referer: req.headers.referer,
+    'user-agent': req.headers['user-agent']
+  });
+  console.log('Request Headers:', req.headers);
+  
+  // Log request body for non-GET requests
+  if (req.method !== 'GET') {
+    console.log('Request Body:', req.body);
+  }
 
-// Apply CORS before any other middleware
-app.use(cors({
-  origin: 'https://cutmap.netlify.app', // Be explicit about the origin
+  // Track response
+  const oldJson = res.json;
+  res.json = function(body) {
+    console.log('Response Body:', body);
+    return oldJson.call(this, body);
+  };
+
+  // Log when response finishes
+  res.on('finish', () => {
+    console.log('\n=== Response Debug Log ===');
+    console.log('Response Status:', res.statusCode);
+    console.log('Response Headers:', res.getHeaders());
+    console.log('=== End Debug Log ===\n');
+  });
+
+  next();
+});
+
+// CORS Configuration with debug logging
+const corsOptions = {
+  origin: function (origin: any, callback: any) {
+    console.log('\n=== CORS Debug ===');
+    console.log('Request Origin:', origin);
+    
+    const allowedOrigins = [
+      process.env.CORS_ORIGIN,
+      process.env.FRONTEND_URL,
+      'https://cutmap.netlify.app',
+      ...(process.env.NODE_ENV !== 'production' ? [
+        'http://localhost:8080',
+        'http://localhost:5173',
+        'http://localhost:3000'
+      ] : [])
+    ].filter(Boolean);
+
+    console.log('Configured Origins:', {
+      CORS_ORIGIN: process.env.CORS_ORIGIN,
+      FRONTEND_URL: process.env.FRONTEND_URL,
+      NODE_ENV: process.env.NODE_ENV,
+      allowedOrigins
+    });
+
+    if (!origin) {
+      console.log('No origin provided - allowing request');
+      callback(null, true);
+      return;
+    }
+
+    if (allowedOrigins.includes(origin)) {
+      console.log('Origin is allowed:', origin);
+      callback(null, true);
+      return;
+    }
+
+    console.log('Origin not allowed:', origin);
+    callback(new Error(`Origin ${origin} not allowed by CORS`));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Cookie'],
   exposedHeaders: ['set-cookie'],
-  optionsSuccessStatus: 200,
-  preflightContinue: false,
-  maxAge: 86400 // 24 hours
-}));
+  maxAge: 86400
+};
 
-// Ensure CORS headers are set even after CORS middleware
+// Apply CORS middleware
+app.use(cors(corsOptions));
+
+// Additional headers middleware with debug
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', 'https://cutmap.netlify.app');
-  res.header('Access-Control-Allow-Credentials', 'true');
+  console.log('\n=== Headers Middleware Debug ===');
+  const origin = req.headers.origin;
+  console.log('Setting headers for origin:', origin);
+
+  if (origin && corsOptions.origin) {
+    (corsOptions.origin as Function)(origin, (error: Error | null, allowed: boolean) => {
+      if (allowed) {
+        console.log('Setting CORS headers for allowed origin');
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+        res.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cookie');
+        console.log('Headers set:', res.getHeaders());
+      } else {
+        console.log('Origin not allowed, no headers set');
+      }
+    });
+  } else {
+    console.log('No origin or corsOptions.origin not configured');
+  }
   next();
+});
+
+// Handle preflight requests with debug
+app.options('*', (req, res) => {
+  console.log('\n=== OPTIONS Request Debug ===');
+  console.log('Handling OPTIONS request for path:', req.path);
+  console.log('Request headers:', req.headers);
+  res.status(200).end();
+  console.log('OPTIONS request handled - sent 200 response');
 });
 
 // Body parser middleware
@@ -56,10 +149,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser(process.env.COOKIE_SECRET));
 
-// Configure Socket.IO
+// Configure Socket.IO with debug logging
 const io = new Server(httpServer, {
   cors: {
-    origin: 'https://cutmap.netlify.app',
+    origin: corsOptions.origin,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Cookie']
