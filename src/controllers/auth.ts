@@ -89,9 +89,10 @@ export const login = async (req: Request, res: Response) => {
     // Set cookie options
     const cookieOptions = {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' as const : 'lax' as const,
-      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+      secure: true,
+      sameSite: 'none' as const,
+      maxAge: 24 * 60 * 60 * 1000,
+      path: '/'
     };
     console.log('Cookie options:', cookieOptions);
 
