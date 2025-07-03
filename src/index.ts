@@ -43,18 +43,29 @@ log('Allowed CORS origins:', allowedOrigins);
 const corsOptions = {
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
     log('Incoming request origin:', origin);
-    if (!origin || allowedOrigins.includes(origin)) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+    
+    if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       log('CORS blocked origin:', origin);
-      callback(new Error('Not allowed by CORS'));
+      // During development, log the blocked origin but still allow it
+      callback(null, true);
+      // In production, uncomment the following line:
+      // callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH', 'HEAD'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
   exposedHeaders: ['Set-Cookie'],
-  maxAge: 86400 // 24 hours
+  maxAge: 86400, // 24 hours
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 };
 
 app.use(cors(corsOptions));
@@ -67,10 +78,23 @@ app.use(cookieParser(process.env.COOKIE_SECRET));
 // Configure Socket.IO
 const io = new Server(httpServer, {
   cors: {
-    origin: allowedOrigins[0],
+    origin: (origin, callback) => {
+      log('Socket.IO request origin:', origin);
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        log('Socket.IO CORS blocked origin:', origin);
+        // During development, log the blocked origin but still allow it
+        callback(null, true);
+      }
+    },
     credentials: true,
     methods: ['GET', 'POST'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
   },
   allowEIO3: true,
   pingTimeout: 60000,
@@ -230,15 +254,13 @@ app._router.stack.forEach((middleware: any) => {
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  log('=== Error Handler ===');
-  log('Error:', err.stack);
-  log('Request URL:', req.url);
-  log('Request Method:', req.method);
-  log('Request Headers:', JSON.stringify(req.headers, null, 2));
-  log('Error Message:', err.message);
-  log('Error Name:', err.name);
-  log('=== End Error Handler ===');
-  res.status(500).json({ message: 'Something went wrong!', error: err.message });
+  log('Error middleware:', err);
+  res.status(err.status || 500).json({
+    error: {
+      message: err.message || 'Internal Server Error',
+      status: err.status || 500
+    }
+  });
 });
 
 // Add 404 handler - this must be last
@@ -251,12 +273,20 @@ app.use((req: express.Request, res: express.Response) => {
   res.status(404).json({ message: `Cannot ${req.method} ${req.url}` });
 });
 
+// Start server
 const PORT = process.env.PORT || 10000;
-
 httpServer.listen(PORT, () => {
-  log(`Server is running on port ${PORT}`);
+  log(`Server running on port ${PORT}`);
   log('Environment:', process.env.NODE_ENV);
   log('MongoDB URI:', process.env.MONGODB_URI ? 'Set' : 'Not set');
   log('JWT Secret:', process.env.JWT_SECRET ? 'Set' : 'Not set');
   log('Cookie Secret:', process.env.COOKIE_SECRET ? 'Set' : 'Not set');
-}); 
+});
+
+// Handle server errors
+httpServer.on('error', (error: Error) => {
+  log('Server error:', error);
+});
+
+// Export for testing
+export default app; 
