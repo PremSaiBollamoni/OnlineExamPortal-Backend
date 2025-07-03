@@ -297,6 +297,7 @@ export const approveExamPaper = async (req: AuthRequest, res: Response) => {
     }
 
     examPaper.status = 'approved';
+    examPaper.isActive = true;
     await examPaper.save();
 
     // Create activity
