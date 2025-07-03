@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { IExamPaper } from '../types';
+import Subject from './Subject';
 
 const questionSchema = new mongoose.Schema({
   question: {
@@ -115,25 +116,30 @@ const examPaperSchema = new mongoose.Schema({
   timestamps: true,
 });
 
-// Virtual field to get semester from subject
-examPaperSchema.virtual('semester').get(function() {
-  return this.subject?.semester;
+// Virtual for getting semester from subject
+examPaperSchema.virtual('semester').get(async function(this: IExamPaper) {
+  if (typeof this.subject === 'object' && this.subject !== null) {
+    return (this.subject as any).semester;
+  }
+  const subject = await Subject.findById(this.subject);
+  return subject?.semester;
 });
 
-// Pre-save middleware to set department and specialization from subject
+// Pre-save middleware to update department and specialization
 examPaperSchema.pre('save', async function(next) {
-  if (this.isNew || this.isModified('subject')) {
-    try {
-      const subject = await this.model('Subject').findById(this.subject);
-      if (subject) {
-        this.department = subject.department;
-        this.specialization = subject.specialization;
+  try {
+    if (this.isModified('subject')) {
+      const subject = await Subject.findById(this.subject);
+      if (!subject) {
+        throw new Error('Subject not found');
       }
-    } catch (error) {
-      next(error);
+      this.department = subject.get('department');
+      this.specialization = subject.get('specialization');
     }
+    next();
+  } catch (error) {
+    next(error as Error);
   }
-  next();
 });
 
 // Always populate subject and faculty
