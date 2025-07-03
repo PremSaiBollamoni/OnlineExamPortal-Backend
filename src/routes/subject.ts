@@ -18,6 +18,12 @@ const log = (...args: any[]) => {
 
 log('Setting up subject routes');
 
+// Test route without authentication
+router.get('/test', (req, res) => {
+  log('Test route hit');
+  res.json({ message: 'Subject routes are working' });
+});
+
 // Log all requests to subject routes
 router.use((req, res, next) => {
   log('=== Subject Route Request ===');
