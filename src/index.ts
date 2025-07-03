@@ -8,6 +8,7 @@ import fileUpload from 'express-fileupload';
 import * as path from 'path';
 import * as os from 'os';
 import dotenv from 'dotenv';
+import jwt from 'jsonwebtoken';
 
 import connectDB from './config/database';
 import authRoutes from './routes/auth';
@@ -52,7 +53,32 @@ const io = new Server(httpServer, {
   cors: {
     origin: allowedOrigins[0],
     credentials: true,
-    methods: ['GET', 'POST']
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+  },
+  allowEIO3: true,
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  transports: ['websocket', 'polling']
+});
+
+// Add authentication middleware to Socket.IO
+io.use((socket, next) => {
+  const token = socket.handshake.auth.token || socket.handshake.headers.authorization;
+  
+  if (!token) {
+    return next(new Error('Authentication error'));
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || '') as { userId: string };
+    if (!decoded || typeof decoded !== 'object' || !('userId' in decoded)) {
+      return next(new Error('Invalid token'));
+    }
+    socket.data.userId = decoded.userId;
+    next();
+  } catch (error) {
+    next(new Error('Authentication error'));
   }
 });
 
@@ -104,9 +130,14 @@ connectDB();
 
 // Socket.io connection handling
 io.on('connection', (socket) => {
-  console.log('A user connected');
+  console.log('Socket connected:', socket.id);
+  
   socket.on('disconnect', () => {
-    console.log('User disconnected');
+    console.log('Socket disconnected:', socket.id);
+  });
+
+  socket.on('error', (error) => {
+    console.error('Socket error:', error);
   });
 });
 
