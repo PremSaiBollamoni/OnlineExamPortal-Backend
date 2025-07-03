@@ -125,6 +125,16 @@ app.use((req, res, next) => {
   next();
 });
 
+// Add request path logging middleware before routes
+app.use((req, res, next) => {
+  console.log('\n=== Request Path Info ===');
+  console.log('Original URL:', req.originalUrl);
+  console.log('Base URL:', req.baseUrl);
+  console.log('Path:', req.path);
+  console.log('Route:', req.route);
+  next();
+});
+
 // Connect to MongoDB
 connectDB();
 
@@ -157,28 +167,77 @@ app.get('/', (req, res) => {
 // API Routes
 console.log('=== Registering Routes ===');
 
-console.log('Registering /api/auth routes');
-app.use('/api/auth', authRoutes);
+// Wrap each route registration in try-catch
+try {
+  console.log('Registering /api/auth routes');
+  app.use('/api/auth', authRoutes);
+} catch (error) {
+  console.error('Error registering auth routes:', error);
+}
 
-console.log('Registering /api/users routes');
-app.use('/api/users', userRoutes);
+try {
+  console.log('Registering /api/users routes');
+  app.use('/api/users', userRoutes);
+} catch (error) {
+  console.error('Error registering user routes:', error);
+}
 
-console.log('Registering /api/subjects routes');
-app.use('/api/subjects', subjectRoutes);
+try {
+  console.log('Registering /api/subjects routes');
+  app.use('/api/subjects', subjectRoutes);
+} catch (error) {
+  console.error('Error registering subject routes:', error);
+}
 
-console.log('Registering /api/exam-papers routes');
-app.use('/api/exam-papers', examPaperRoutes);
+try {
+  console.log('Registering /api/exam-papers routes');
+  app.use('/api/exam-papers', examPaperRoutes);
+} catch (error) {
+  console.error('Error registering exam paper routes:', error);
+}
 
-console.log('Registering /api/submissions routes');
-app.use('/api/submissions', submissionRoutes);
+try {
+  console.log('Registering /api/submissions routes');
+  app.use('/api/submissions', submissionRoutes);
+} catch (error) {
+  console.error('Error registering submission routes:', error);
+}
 
-console.log('Registering /api/results routes');
-app.use('/api/results', resultRoutes);
+try {
+  console.log('Registering /api/results routes');
+  app.use('/api/results', resultRoutes);
+} catch (error) {
+  console.error('Error registering result routes:', error);
+}
 
-console.log('Registering /api/activities routes');
-app.use('/api/activities', activityRoutes);
+try {
+  console.log('Registering /api/activities routes');
+  app.use('/api/activities', activityRoutes);
+} catch (error) {
+  console.error('Error registering activity routes:', error);
+}
 
 console.log('=== All Routes Registered ===');
+
+// Print registered routes
+console.log('\n=== Registered Routes ===');
+app._router.stack.forEach((middleware: any) => {
+  if (middleware.route) {
+    console.log('Route:', {
+      path: middleware.route.path,
+      methods: Object.keys(middleware.route.methods)
+    });
+  } else if (middleware.name === 'router') {
+    middleware.handle.stack.forEach((handler: any) => {
+      if (handler.route) {
+        console.log('Router:', {
+          path: handler.route.path,
+          methods: Object.keys(handler.route.methods)
+        });
+      }
+    });
+  }
+});
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
