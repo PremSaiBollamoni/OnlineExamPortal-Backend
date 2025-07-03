@@ -3,11 +3,12 @@ import jwt from 'jsonwebtoken';
 import User from '../models/User';
 import bcrypt from 'bcryptjs';
 
-const JWT_SECRET = 'cutm-exam-portal-secret-key-2024';
+const JWT_SECRET = process.env.JWT_SECRET || 'cutm-exam-portal-secret-key-2024';
+const COOKIE_SECRET = process.env.COOKIE_SECRET || 'cutm-exam-portal-cookie-secret-2024';
 
 const generateToken = (userId: string) => {
-  return jwt.sign({ userId }, process.env.JWT_SECRET || JWT_SECRET, {
-    expiresIn: '30d',
+  return jwt.sign({ userId }, JWT_SECRET, {
+    expiresIn: '24h',
   });
 };
 
@@ -28,6 +29,18 @@ export const register = async (req: Request, res: Response) => {
     });
 
     const token = generateToken(user._id);
+
+    // Set cookie options
+    const cookieOptions = {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' as const : 'lax' as const,
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      signed: true
+    };
+
+    // Set cookie
+    res.cookie('token', token, cookieOptions);
 
     res.status(201).json({
       user: {
@@ -61,7 +74,7 @@ export const login = async (req: Request, res: Response) => {
     const { email, password } = req.body;
 
     // Find user
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email }).select('+password');
     console.log('User found:', user ? 'Yes' : 'No');
 
     if (!user) {
@@ -79,11 +92,7 @@ export const login = async (req: Request, res: Response) => {
     }
 
     // Generate token
-    const token = jwt.sign(
-      { userId: user._id },
-      process.env.JWT_SECRET!,
-      { expiresIn: '24h' }
-    );
+    const token = generateToken(user._id);
     console.log('Token generated:', token ? 'Yes' : 'No');
 
     // Set cookie options
@@ -91,22 +100,32 @@ export const login = async (req: Request, res: Response) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'none' as const : 'lax' as const,
-      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      signed: true,
+      domain: process.env.NODE_ENV === 'production' ? '.netlify.app' : undefined
     };
     console.log('Cookie options:', cookieOptions);
 
-    // Set cookie and send response
+    // Clear any existing cookies
+    res.clearCookie('token');
+
+    // Set new cookie
     res.cookie('token', token, cookieOptions);
 
     console.log('=== Login Success ===');
-    console.log('Response headers to be sent:', res.getHeaders());
+    console.log('Response headers:', res.getHeaders());
 
+    // Send response with user data and token
     return res.status(200).json({
       user: {
         _id: user._id,
         name: user.name,
         email: user.email,
-        role: user.role
+        role: user.role,
+        semester: user.semester,
+        department: user.department,
+        school: user.school,
+        specialization: user.specialization
       },
       token
     });
