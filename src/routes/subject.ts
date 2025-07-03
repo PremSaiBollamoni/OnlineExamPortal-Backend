@@ -20,8 +20,17 @@ log('Setting up subject routes');
 
 // Test route without authentication
 router.get('/test', (req, res) => {
-  log('Test route hit');
-  res.json({ message: 'Subject routes are working' });
+  log('Subject test route hit');
+  res.json({ 
+    message: 'Subject routes are working',
+    timestamp: new Date().toISOString(),
+    routes: router.stack
+      .filter((r: any) => r.route)
+      .map((r: any) => ({
+        path: r.route.path,
+        methods: Object.keys(r.route.methods)
+      }))
+  });
 });
 
 // Log all requests to subject routes
