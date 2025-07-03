@@ -10,29 +10,35 @@ import * as os from 'os';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 
-import connectDB from './config/database';
-import authRoutes from './routes/auth';
-import userRoutes from './routes/user';
-import examPaperRoutes from './routes/examPaper';
-import submissionRoutes from './routes/submission';
-import resultRoutes from './routes/result';
-import activityRoutes from './routes/activity';
-import subjectRoutes from './routes/subject';
+// Custom logger function
+const log = (...args: any[]) => {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}]`, ...args);
+};
 
 // Load env vars
 dotenv.config();
+
+log('Starting server...');
+log('Environment:', process.env.NODE_ENV);
+log('MongoDB URI:', process.env.MONGODB_URI ? 'Set' : 'Not set');
+log('JWT Secret:', process.env.JWT_SECRET ? 'Set' : 'Not set');
+log('Cookie Secret:', process.env.COOKIE_SECRET ? 'Set' : 'Not set');
 
 const app = express();
 const httpServer = createServer(app);
 
 // CORS configuration
 const allowedOrigins = ['https://cutmap.netlify.app'];
+log('Allowed CORS origins:', allowedOrigins);
 
-app.use(cors({
-  origin: (origin, callback) => {
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    log('Incoming request origin:', origin);
     if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, origin);
+      callback(null, true);
     } else {
+      log('CORS blocked origin:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -41,7 +47,9 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
   exposedHeaders: ['Set-Cookie'],
   maxAge: 86400 // 24 hours
-}));
+};
+
+app.use(cors(corsOptions));
 
 // Body parser middleware
 app.use(express.json());
@@ -65,6 +73,7 @@ const io = new Server(httpServer, {
 // Add authentication middleware to Socket.IO
 io.use((socket, next) => {
   const token = socket.handshake.auth.token || socket.handshake.headers.authorization;
+  log('Socket auth token:', token ? 'Present' : 'Missing');
   
   if (!token) {
     return next(new Error('Authentication error'));
@@ -73,11 +82,14 @@ io.use((socket, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || '') as { userId: string };
     if (!decoded || typeof decoded !== 'object' || !('userId' in decoded)) {
+      log('Socket invalid token');
       return next(new Error('Invalid token'));
     }
     socket.data.userId = decoded.userId;
+    log('Socket authenticated for user:', decoded.userId);
     next();
   } catch (error) {
+    log('Socket auth error:', error);
     next(new Error('Authentication error'));
   }
 });
@@ -104,12 +116,11 @@ app.use(fileUpload({
 
 // Add request logging middleware
 app.use((req, res, next) => {
-  console.log('\n=== Incoming Request ===');
-  console.log('Timestamp:', new Date().toISOString());
-  console.log('Method:', req.method);
-  console.log('URL:', req.url);
-  console.log('Origin:', req.headers.origin);
-  console.log('Headers:', req.headers);
+  log('\n=== Incoming Request ===');
+  log('Method:', req.method);
+  log('URL:', req.url);
+  log('Origin:', req.headers.origin);
+  log('Headers:', JSON.stringify(req.headers, null, 2));
   next();
 });
 
@@ -117,37 +128,28 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
   const originalSend = res.send;
   res.send = function(...args) {
-    console.log('\n=== Outgoing Response ===');
-    console.log('Status:', res.statusCode);
-    console.log('Headers:', res.getHeaders());
+    log('\n=== Outgoing Response ===');
+    log('Status:', res.statusCode);
+    log('Headers:', JSON.stringify(res.getHeaders(), null, 2));
     return originalSend.apply(res, args);
   };
   next();
 });
 
-// Add request path logging middleware before routes
-app.use((req, res, next) => {
-  console.log('\n=== Request Path Info ===');
-  console.log('Original URL:', req.originalUrl);
-  console.log('Base URL:', req.baseUrl);
-  console.log('Path:', req.path);
-  console.log('Route:', req.route);
-  next();
-});
-
 // Connect to MongoDB
+import connectDB from './config/database';
 connectDB();
 
 // Socket.io connection handling
 io.on('connection', (socket) => {
-  console.log('Socket connected:', socket.id);
+  log('Socket connected:', socket.id);
   
   socket.on('disconnect', () => {
-    console.log('Socket disconnected:', socket.id);
+    log('Socket disconnected:', socket.id);
   });
 
   socket.on('error', (error) => {
-    console.error('Socket error:', error);
+    log('Socket error:', error);
   });
 });
 
@@ -156,6 +158,7 @@ app.set('io', io);
 
 // Add a root route for health check
 app.get('/', (req, res) => {
+  log('Health check request');
   res.json({ 
     status: 'ok', 
     message: 'Server is running',
@@ -164,73 +167,51 @@ app.get('/', (req, res) => {
   });
 });
 
-// API Routes
-console.log('=== Registering Routes ===');
+// Import routes
+import authRoutes from './routes/auth';
+import userRoutes from './routes/user';
+import examPaperRoutes from './routes/examPaper';
+import submissionRoutes from './routes/submission';
+import resultRoutes from './routes/result';
+import activityRoutes from './routes/activity';
+import subjectRoutes from './routes/subject';
 
-// Wrap each route registration in try-catch
-try {
-  console.log('Registering /api/auth routes');
-  app.use('/api/auth', authRoutes);
-} catch (error) {
-  console.error('Error registering auth routes:', error);
-}
+log('=== Registering Routes ===');
 
-try {
-  console.log('Registering /api/users routes');
-  app.use('/api/users', userRoutes);
-} catch (error) {
-  console.error('Error registering user routes:', error);
-}
+// API Routes with error handling
+const registerRoute = (path: string, router: express.Router) => {
+  try {
+    log(`Registering route: ${path}`);
+    app.use(path, router);
+    log(`Successfully registered route: ${path}`);
+  } catch (error) {
+    log(`Error registering route ${path}:`, error);
+    throw error;
+  }
+};
 
-try {
-  console.log('Registering /api/subjects routes');
-  app.use('/api/subjects', subjectRoutes);
-} catch (error) {
-  console.error('Error registering subject routes:', error);
-}
+registerRoute('/api/auth', authRoutes);
+registerRoute('/api/users', userRoutes);
+registerRoute('/api/subjects', subjectRoutes);
+registerRoute('/api/exam-papers', examPaperRoutes);
+registerRoute('/api/submissions', submissionRoutes);
+registerRoute('/api/results', resultRoutes);
+registerRoute('/api/activities', activityRoutes);
 
-try {
-  console.log('Registering /api/exam-papers routes');
-  app.use('/api/exam-papers', examPaperRoutes);
-} catch (error) {
-  console.error('Error registering exam paper routes:', error);
-}
-
-try {
-  console.log('Registering /api/submissions routes');
-  app.use('/api/submissions', submissionRoutes);
-} catch (error) {
-  console.error('Error registering submission routes:', error);
-}
-
-try {
-  console.log('Registering /api/results routes');
-  app.use('/api/results', resultRoutes);
-} catch (error) {
-  console.error('Error registering result routes:', error);
-}
-
-try {
-  console.log('Registering /api/activities routes');
-  app.use('/api/activities', activityRoutes);
-} catch (error) {
-  console.error('Error registering activity routes:', error);
-}
-
-console.log('=== All Routes Registered ===');
+log('=== All Routes Registered ===');
 
 // Print registered routes
-console.log('\n=== Registered Routes ===');
+log('\n=== Registered Routes ===');
 app._router.stack.forEach((middleware: any) => {
   if (middleware.route) {
-    console.log('Route:', {
+    log('Route:', {
       path: middleware.route.path,
       methods: Object.keys(middleware.route.methods)
     });
   } else if (middleware.name === 'router') {
     middleware.handle.stack.forEach((handler: any) => {
       if (handler.route) {
-        console.log('Router:', {
+        log('Router:', {
           path: handler.route.path,
           methods: Object.keys(handler.route.methods)
         });
@@ -241,33 +222,33 @@ app._router.stack.forEach((middleware: any) => {
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('=== Error Handler ===');
-  console.error('Error:', err.stack);
-  console.error('Request URL:', req.url);
-  console.error('Request Method:', req.method);
-  console.error('Request Headers:', req.headers);
-  console.error('Error Message:', err.message);
-  console.error('Error Name:', err.name);
-  console.error('=== End Error Handler ===');
+  log('=== Error Handler ===');
+  log('Error:', err.stack);
+  log('Request URL:', req.url);
+  log('Request Method:', req.method);
+  log('Request Headers:', JSON.stringify(req.headers, null, 2));
+  log('Error Message:', err.message);
+  log('Error Name:', err.name);
+  log('=== End Error Handler ===');
   res.status(500).json({ message: 'Something went wrong!', error: err.message });
 });
 
 // Add 404 handler - this must be last
 app.use((req: express.Request, res: express.Response) => {
-  console.error('=== 404 Not Found ===');
-  console.error('Request URL:', req.url);
-  console.error('Request Method:', req.method);
-  console.error('Request Headers:', req.headers);
-  console.error('=== End 404 Not Found ===');
+  log('=== 404 Not Found ===');
+  log('Request URL:', req.url);
+  log('Request Method:', req.method);
+  log('Request Headers:', JSON.stringify(req.headers, null, 2));
+  log('=== End 404 Not Found ===');
   res.status(404).json({ message: `Cannot ${req.method} ${req.url}` });
 });
 
 const PORT = process.env.PORT || 10000;
 
 httpServer.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-  console.log('Environment:', process.env.NODE_ENV);
-  console.log('MongoDB URI:', process.env.MONGODB_URI ? 'Set' : 'Not set');
-  console.log('JWT Secret:', process.env.JWT_SECRET ? 'Set' : 'Not set');
-  console.log('Cookie Secret:', process.env.COOKIE_SECRET ? 'Set' : 'Not set');
+  log(`Server is running on port ${PORT}`);
+  log('Environment:', process.env.NODE_ENV);
+  log('MongoDB URI:', process.env.MONGODB_URI ? 'Set' : 'Not set');
+  log('JWT Secret:', process.env.JWT_SECRET ? 'Set' : 'Not set');
+  log('Cookie Secret:', process.env.COOKIE_SECRET ? 'Set' : 'Not set');
 }); 
