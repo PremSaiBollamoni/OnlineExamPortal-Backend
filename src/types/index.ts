@@ -27,13 +27,15 @@ export interface IExamPaper extends Document {
     name: string;
     semester: number;
     facultyId: string;
+    department: string;
+    specialization?: string;
   };
   facultyId: {
     _id: string;
     name: string;
   };
-  department: 'CSE' | 'MECH' | 'ECE' | 'BSc' | 'BBA';
-  specialization: 'AIML' | 'DSML' | 'CSBS' | 'CN' | 'Forensic Science' | 'Anesthesia' | 'Radiology' | 'Optometry' | 'Pharmacy' | 'Agriculture' | 'No Specialization';
+  department: string;
+  specialization?: string;
   duration: number;
   totalMarks: number;
   passingMarks: number;
@@ -61,7 +63,12 @@ export interface IQuestion {
 
 export interface ISubmission extends Document {
   _id: string;
-  examPaper: string;
+  examPaper: {
+    _id: string;
+    title: string;
+    totalMarks: number;
+    passingMarks: number;
+  };
   student: string;
   answers: {
     questionIndex: number;
