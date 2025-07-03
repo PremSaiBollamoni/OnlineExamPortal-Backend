@@ -24,24 +24,23 @@ dotenv.config();
 const app = express();
 const httpServer = createServer(app);
 
+// CORS configuration
+const allowedOrigins = ['https://cutmap.netlify.app'];
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  const allowedOrigins = ['https://cutmap.netlify.app'];
-
-  if (origin && allowedOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  }
-
-  if (req.method === 'OPTIONS') {
-    return res.status(204).end();
-  } 
-
-  next();
-});
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, origin);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH', 'HEAD'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  exposedHeaders: ['Set-Cookie'],
+  maxAge: 86400 // 24 hours
+}));
 
 // Body parser middleware
 app.use(express.json());
@@ -51,7 +50,7 @@ app.use(cookieParser(process.env.COOKIE_SECRET));
 // Configure Socket.IO
 const io = new Server(httpServer, {
   cors: {
-    origin: 'https://cutmap.netlify.app',
+    origin: allowedOrigins[0],
     credentials: true,
     methods: ['GET', 'POST']
   }
