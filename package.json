@@ -5,7 +5,7 @@
   "scripts": {
     "start": "node dist/index.js",
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
-    "build": "tsc",
+    "build": "rimraf dist && tsc",
     "create-admin": "ts-node src/scripts/createAdmin.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -14,8 +14,10 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@types/cookie-parser": "^1.4.9",
     "@types/socket.io": "^3.0.1",
     "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "csv-parse": "^5.6.0",
     "dotenv": "^16.0.3",
@@ -23,6 +25,7 @@
     "express-fileupload": "^1.5.1",
     "jsonwebtoken": "^9.0.0",
     "mongoose": "^7.0.3",
+    "rimraf": "^5.0.5",
     "socket.io": "^4.8.1"
   },
   "devDependencies": {
