@@ -69,13 +69,15 @@ export const getExamPapers = async (req: AuthRequest, res: Response) => {
         specialization: studentSpecialization
       });
 
-      // First get subjects for the student's semester
+      // Find subjects for the student's semester and department
       const subjects = await Subject.find({
         semester: studentSemester,
         department: studentDepartment,
         $or: [
           { specialization: studentSpecialization },
-          { specialization: { $in: ['No Specialization', null, ''] } }
+          { specialization: 'No Specialization' },
+          { specialization: null },
+          { specialization: '' }
         ]
       });
 
@@ -88,32 +90,21 @@ export const getExamPapers = async (req: AuthRequest, res: Response) => {
 
       const subjectIds = subjects.map(subject => subject._id);
 
-      // Then find approved papers for those subjects
-      query = { 
-        status: 'approved',
-        subject: { $in: subjectIds }
-      };
-
-      // Add time constraints for students
+      // Then find approved papers for those subjects with time constraints
       const now = new Date();
       query = {
-        ...query,
-        $and: [
-          { subject: { $in: subjectIds } },
-          { status: 'approved' },
-          {
-            $or: [
-              // Papers with no time constraints
-              { $and: [
-                { startTime: null },
-                { endTime: null }
-              ]},
-              // Papers within time window
-              { $and: [
-                { startTime: { $lte: now } },
-                { endTime: { $gte: now } }
-              ]}
-            ]
+        subject: { $in: subjectIds },
+        status: 'approved',
+        $or: [
+          // Papers with no time constraints
+          { 
+            startTime: null,
+            endTime: null 
+          },
+          // Papers within time window
+          { 
+            startTime: { $lte: now },
+            endTime: { $gte: now }
           }
         ]
       };
