@@ -144,7 +144,17 @@ io.on('connection', (socket) => {
 // Make io accessible to our routes
 app.set('io', io);
 
-// Routes
+// Add a root route for health check
+app.get('/', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    message: 'Server is running',
+    environment: process.env.NODE_ENV,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/subjects', subjectRoutes);
@@ -153,15 +163,27 @@ app.use('/api/submissions', submissionRoutes);
 app.use('/api/results', resultRoutes);
 app.use('/api/activities', activityRoutes);
 
-// Add a root route for health check
-app.get('/', (req, res) => {
-  res.json({ status: 'ok', message: 'Server is running' });
-});
-
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('=== Error Handler ===');
   console.error('Error:', err.stack);
-  res.status(500).json({ message: 'Something went wrong!' });
+  console.error('Request URL:', req.url);
+  console.error('Request Method:', req.method);
+  console.error('Request Headers:', req.headers);
+  console.error('Error Message:', err.message);
+  console.error('Error Name:', err.name);
+  console.error('=== End Error Handler ===');
+  res.status(500).json({ message: 'Something went wrong!', error: err.message });
+});
+
+// Add 404 handler - this must be last
+app.use((req: express.Request, res: express.Response) => {
+  console.error('=== 404 Not Found ===');
+  console.error('Request URL:', req.url);
+  console.error('Request Method:', req.method);
+  console.error('Request Headers:', req.headers);
+  console.error('=== End 404 Not Found ===');
+  res.status(404).json({ message: `Cannot ${req.method} ${req.url}` });
 });
 
 const PORT = process.env.PORT || 10000;
