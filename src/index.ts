@@ -195,6 +195,21 @@ connectDB().then(() => {
       status: 'ok', 
       message: 'Server is running',
       environment: process.env.NODE_ENV,
+      timestamp: new Date().toISOString(),
+      routes: app._router.stack
+        .filter((r: any) => r.route)
+        .map((r: any) => ({
+          path: r.route.path,
+          methods: Object.keys(r.route.methods)
+        }))
+    });
+  });
+
+  // Test route without auth
+  app.get('/test', (req, res) => {
+    log('Test route hit');
+    res.json({ 
+      message: 'Server is working',
       timestamp: new Date().toISOString()
     });
   });
