@@ -75,7 +75,7 @@ export const getExamPapers = async (req: AuthRequest, res: Response) => {
         department: studentDepartment,
         $or: [
           { specialization: studentSpecialization },
-          { specialization: 'No Specialization' }
+          { specialization: { $in: ['No Specialization', null, ''] } }
         ]
       });
 
@@ -92,6 +92,21 @@ export const getExamPapers = async (req: AuthRequest, res: Response) => {
       query = { 
         status: 'approved',
         subject: { $in: subjectIds }
+      };
+
+      // Add time constraints for students
+      const now = new Date();
+      query = {
+        ...query,
+        $or: [
+          // Papers with no time constraints
+          { startTime: null, endTime: null },
+          // Papers within time window
+          {
+            startTime: { $lte: now },
+            endTime: { $gte: now }
+          }
+        ]
       };
     }
     // Admin can see all papers (empty query)
@@ -121,9 +136,15 @@ export const getExamPapers = async (req: AuthRequest, res: Response) => {
       // Filter and transform exam papers
       examPapers = examPapers
         .filter(paper => {
-          // Ensure the paper's subject matches student's semester
-          const subjectSemester = paper.subject?.semester;
-          return subjectSemester === req.user?.semester;
+          // Double check the paper's subject matches student's semester and department
+          const subject = paper.subject;
+          if (!subject) return false;
+          
+          return subject.semester === req.user?.semester &&
+                 subject.department === req.user?.department &&
+                 (subject.specialization === req.user?.specialization ||
+                  !subject.specialization ||
+                  subject.specialization === 'No Specialization');
         })
         .map(paper => {
           const paperObj = paper.toObject();
