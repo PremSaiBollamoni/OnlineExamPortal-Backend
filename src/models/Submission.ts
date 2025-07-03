@@ -20,6 +20,7 @@ export interface ISubmission {
   status: 'pending' | 'evaluated' | 'submitted_to_admin' | 'published';
   submittedToAdminAt: Date | null;
   publishedAt: Date | null;
+  feedback?: string;
 }
 
 const submissionSchema = new mongoose.Schema<ISubmission>({
@@ -81,6 +82,10 @@ const submissionSchema = new mongoose.Schema<ISubmission>({
   },
   publishedAt: {
     type: Date,
+    default: null
+  },
+  feedback: {
+    type: String,
     default: null
   }
 }, {
