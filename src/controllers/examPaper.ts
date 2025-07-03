@@ -98,20 +98,28 @@ export const getExamPapers = async (req: AuthRequest, res: Response) => {
       const now = new Date();
       query = {
         ...query,
-        $or: [
-          // Papers with no time constraints
-          { startTime: null, endTime: null },
-          // Papers within time window
+        $and: [
+          { subject: { $in: subjectIds } },
+          { status: 'approved' },
           {
-            startTime: { $lte: now },
-            endTime: { $gte: now }
+            $or: [
+              // Papers with no time constraints
+              { $and: [
+                { startTime: null },
+                { endTime: null }
+              ]},
+              // Papers within time window
+              { $and: [
+                { startTime: { $lte: now } },
+                { endTime: { $gte: now } }
+              ]}
+            ]
           }
         ]
       };
     }
-    // Admin can see all papers (empty query)
 
-    console.log('Final query:', query);
+    console.log('Final query:', JSON.stringify(query, null, 2));
 
     let examPapers = await ExamPaper.find(query)
       .populate({
@@ -120,7 +128,7 @@ export const getExamPapers = async (req: AuthRequest, res: Response) => {
       })
       .populate('facultyId', 'name');
 
-    console.log('Found exam papers:', examPapers.length);
+    console.log('Found exam papers before filtering:', examPapers.length);
 
     // If student, check for submissions and filter/mark papers accordingly
     if (req.user?.role === 'student') {
@@ -140,11 +148,28 @@ export const getExamPapers = async (req: AuthRequest, res: Response) => {
           const subject = paper.subject;
           if (!subject) return false;
           
-          return subject.semester === req.user?.semester &&
-                 subject.department === req.user?.department &&
-                 (subject.specialization === req.user?.specialization ||
-                  !subject.specialization ||
-                  subject.specialization === 'No Specialization');
+          const matchesSemester = subject.semester === req.user?.semester;
+          const matchesDepartment = subject.department === req.user?.department;
+          const matchesSpecialization = 
+            subject.specialization === req.user?.specialization ||
+            !subject.specialization ||
+            subject.specialization === 'No Specialization';
+
+          console.log('Paper filtering details:', {
+            paperId: paper._id,
+            paperTitle: paper.title,
+            matchesSemester,
+            matchesDepartment,
+            matchesSpecialization,
+            subjectSemester: subject.semester,
+            userSemester: req.user?.semester,
+            subjectDepartment: subject.department,
+            userDepartment: req.user?.department,
+            subjectSpecialization: subject.specialization,
+            userSpecialization: req.user?.specialization
+          });
+
+          return matchesSemester && matchesDepartment && matchesSpecialization;
         })
         .map(paper => {
           const paperObj = paper.toObject();
