@@ -155,13 +155,30 @@ app.get('/', (req, res) => {
 });
 
 // API Routes
+console.log('=== Registering Routes ===');
+
+console.log('Registering /api/auth routes');
 app.use('/api/auth', authRoutes);
+
+console.log('Registering /api/users routes');
 app.use('/api/users', userRoutes);
+
+console.log('Registering /api/subjects routes');
 app.use('/api/subjects', subjectRoutes);
+
+console.log('Registering /api/exam-papers routes');
 app.use('/api/exam-papers', examPaperRoutes);
+
+console.log('Registering /api/submissions routes');
 app.use('/api/submissions', submissionRoutes);
+
+console.log('Registering /api/results routes');
 app.use('/api/results', resultRoutes);
+
+console.log('Registering /api/activities routes');
 app.use('/api/activities', activityRoutes);
+
+console.log('=== All Routes Registered ===');
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
