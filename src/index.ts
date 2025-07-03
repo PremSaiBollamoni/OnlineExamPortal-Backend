@@ -153,14 +153,23 @@ app.use('/api/submissions', submissionRoutes);
 app.use('/api/results', resultRoutes);
 app.use('/api/activities', activityRoutes);
 
+// Add a root route for health check
+app.get('/', (req, res) => {
+  res.json({ status: 'ok', message: 'Server is running' });
+});
+
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('Error:', err.stack);
   res.status(500).json({ message: 'Something went wrong!' });
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 10000;
 
 httpServer.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+  console.log('Environment:', process.env.NODE_ENV);
+  console.log('MongoDB URI:', process.env.MONGODB_URI ? 'Set' : 'Not set');
+  console.log('JWT Secret:', process.env.JWT_SECRET ? 'Set' : 'Not set');
+  console.log('Cookie Secret:', process.env.COOKIE_SECRET ? 'Set' : 'Not set');
 }); 
