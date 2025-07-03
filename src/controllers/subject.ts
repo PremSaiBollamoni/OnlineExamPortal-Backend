@@ -1,6 +1,6 @@
 import { Response } from 'express';
 import Subject from '../models/Subject';
-import { AuthRequest } from '../middleware/auth';
+import { AuthRequest } from '../types';
 import mongoose from 'mongoose';
 
 // Get all subjects
