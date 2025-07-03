@@ -8,48 +8,37 @@ import { AuthRequest } from '../types';
 import Activity from '../models/Activity';
 import { Types } from 'mongoose';
 
-// Get all submissions
+// Get submissions
 export const getSubmissions = async (req: AuthRequest, res: Response) => {
   try {
     let query = {};
-    
-    // If faculty user, show submissions for their exam papers
-    if (req.user?.role === 'faculty') {
-      // Get exam papers created by this faculty
-      const examPapers = await ExamPaper.find({ facultyId: req.user._id });
-      const examPaperIds = examPapers.map(ep => ep._id);
-      
-      // Filter submissions by these exam papers
-      query = { 
-        examPaper: { $in: examPaperIds },
-        isSubmitted: true
-      };
-    }
 
-    // If student user, only show their own submissions
+    // Filter based on user role
     if (req.user?.role === 'student') {
       query = { student: req.user._id };
+    } else if (req.user?.role === 'faculty') {
+      // Get exam papers created by this faculty
+      const examPapers = await ExamPaper.find({ facultyId: req.user._id });
+      const examPaperIds = examPapers.map(paper => paper._id);
+      query = { examPaper: { $in: examPaperIds } };
     }
 
     const submissions = await Submission.find(query)
-      .populate('student', 'name studentId')
       .populate({
         path: 'examPaper',
-        select: 'title subject totalMarks',
+        select: 'title totalMarks passingMarks',
         populate: {
           path: 'subject',
-          select: 'name'
+          select: 'name semester department specialization'
         }
       })
-      .populate('evaluatedBy', 'name')
-      .sort('-createdAt');
+      .populate('student', 'name studentId')
+      .populate('evaluatedBy', 'name');
 
     res.json(submissions);
   } catch (error: any) {
-    res.status(500).json({ 
-      message: 'Error fetching submissions',
-      error: error.message 
-    });
+    console.error('Get submissions error:', error);
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -319,15 +308,13 @@ export const publishResult = async (req: AuthRequest, res: Response) => {
 
     // Create result document
     const result = await Result.create({
-      student: submission.student._id,
       examPaper: submission.examPaper._id,
+      student: submission.student,
       submission: submission._id,
-      score: submission.score,
-      totalMarks: submission.examPaper.totalMarks,
-      percentage: (submission.score / submission.examPaper.totalMarks) * 100,
-      evaluatedBy: submission.evaluatedBy,
-      evaluatedAt: submission.evaluatedAt,
-      publishedAt: new Date()
+      score: submission.score || 0,
+      totalMarks: (submission.examPaper as any).totalMarks,
+      percentage: ((submission.score || 0) / (submission.examPaper as any).totalMarks) * 100,
+      feedback: submission.feedback
     });
 
     // Update submission status
