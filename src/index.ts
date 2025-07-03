@@ -174,6 +174,15 @@ app.get('/', (req, res) => {
   });
 });
 
+// Test route
+app.get('/api/test', (req, res) => {
+  log('API test route hit');
+  res.json({ 
+    message: 'API is working',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Import routes
 log('=== Registering Routes ===');
 
