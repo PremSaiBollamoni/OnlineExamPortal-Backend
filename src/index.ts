@@ -169,123 +169,123 @@ app.use((req, res, next) => {
 });
 
 // Connect to MongoDB
-connectDB();
-
-// Socket.io connection handling
-io.on('connection', (socket) => {
-  log('Socket connected:', socket.id);
+connectDB().then(() => {
+  log('MongoDB connected successfully');
   
-  socket.on('disconnect', () => {
-    log('Socket disconnected:', socket.id);
-  });
-
-  socket.on('error', (error) => {
-    log('Socket error:', error);
-  });
-});
-
-// Make io accessible to our routes
-app.set('io', io);
-
-// Add a root route for health check
-app.get('/', (req, res) => {
-  log('Health check request');
-  res.json({ 
-    status: 'ok', 
-    message: 'Server is running',
-    environment: process.env.NODE_ENV,
-    timestamp: new Date().toISOString()
-  });
-});
-
-// Test route
-app.get('/api/test', (req, res) => {
-  log('API test route hit');
-  res.json({ 
-    message: 'API is working',
-    timestamp: new Date().toISOString()
-  });
-});
-
-// Import routes
-log('=== Registering Routes ===');
-
-// API Routes with error handling
-const registerRoute = (path: string, router: express.Router) => {
-  try {
-    log(`Registering route: ${path}`);
-    app.use(path, router);
-    log(`Successfully registered route: ${path}`);
-  } catch (error) {
-    log(`Error registering route ${path}:`, error);
-    throw error;
-  }
-};
-
-registerRoute('/api/auth', authRoutes);
-registerRoute('/api/users', userRoutes);
-registerRoute('/api/subjects', subjectRoutes);
-registerRoute('/api/exam-papers', examPaperRoutes);
-registerRoute('/api/submissions', submissionRoutes);
-registerRoute('/api/results', resultRoutes);
-registerRoute('/api/activities', activityRoutes);
-
-log('=== All Routes Registered ===');
-
-// Print registered routes
-log('\n=== Registered Routes ===');
-app._router.stack.forEach((middleware: any) => {
-  if (middleware.route) {
-    log('Route:', {
-      path: middleware.route.path,
-      methods: Object.keys(middleware.route.methods)
+  // Socket.io connection handling
+  io.on('connection', (socket) => {
+    log('Socket connected:', socket.id);
+    
+    socket.on('disconnect', () => {
+      log('Socket disconnected:', socket.id);
     });
-  } else if (middleware.name === 'router') {
-    middleware.handle.stack.forEach((handler: any) => {
-      if (handler.route) {
-        log('Router:', {
-          path: handler.route.path,
-          methods: Object.keys(handler.route.methods)
-        });
+
+    socket.on('error', (error) => {
+      log('Socket error:', error);
+    });
+  });
+
+  // Make io accessible to our routes
+  app.set('io', io);
+
+  // Add a root route for health check
+  app.get('/', (req, res) => {
+    log('Health check request');
+    res.json({ 
+      status: 'ok', 
+      message: 'Server is running',
+      environment: process.env.NODE_ENV,
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  // Register routes after DB connection
+  log('=== Registering Routes ===');
+  try {
+    // Test routes first
+    app.get('/api/test', (req, res) => {
+      log('API test route hit');
+      res.json({ 
+        message: 'API is working',
+        timestamp: new Date().toISOString()
+      });
+    });
+
+    // Register all routes with debug logging
+    const routes = [
+      { path: '/api/auth', router: authRoutes },
+      { path: '/api/users', router: userRoutes },
+      { path: '/api/exam-papers', router: examPaperRoutes },
+      { path: '/api/submissions', router: submissionRoutes },
+      { path: '/api/results', router: resultRoutes },
+      { path: '/api/activities', router: activityRoutes },
+      { path: '/api/subjects', router: subjectRoutes }
+    ];
+
+    routes.forEach(({ path, router }) => {
+      try {
+        log(`Registering route: ${path}`);
+        app.use(path, router);
+        log(`Successfully registered route: ${path}`);
+        
+        // Log available methods for this route
+        const stack = (router as any).stack;
+        if (stack) {
+          const methods = stack.map((layer: any) => {
+            return `${layer.route?.path || ''} [${Object.keys(layer.route?.methods || {}).join(', ')}]`;
+          }).filter(Boolean);
+          log(`Available endpoints for ${path}:`, methods);
+        }
+      } catch (error) {
+        log(`Error registering route ${path}:`, error);
+        throw error;
       }
     });
+
+    log('=== Route Registration Complete ===');
+
+    // Add 404 handler - this must be last
+    app.use((req: express.Request, res: express.Response) => {
+      log('=== 404 Not Found ===');
+      log('Request URL:', req.url);
+      log('Request Method:', req.method);
+      log('Request Headers:', JSON.stringify(req.headers, null, 2));
+      log('=== End 404 Not Found ===');
+      res.status(404).json({ message: `Cannot ${req.method} ${req.url}` });
+    });
+
+    // Error handling middleware
+    app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+      log('Error middleware:', err);
+      res.status(err.status || 500).json({
+        error: {
+          message: err.message || 'Internal Server Error',
+          status: err.status || 500
+        }
+      });
+    });
+
+    // Start server
+    const PORT = process.env.PORT || 10000;
+    httpServer.listen(PORT, () => {
+      log(`Server running on port ${PORT}`);
+      log('Environment:', process.env.NODE_ENV);
+      log('MongoDB URI:', process.env.MONGODB_URI ? 'Set' : 'Not set');
+      log('JWT Secret:', process.env.JWT_SECRET ? 'Set' : 'Not set');
+      log('Cookie Secret:', process.env.COOKIE_SECRET ? 'Set' : 'Not set');
+    });
+
+    // Handle server errors
+    httpServer.on('error', (error: Error) => {
+      log('Server error:', error);
+    });
+  } catch (error) {
+    log('Fatal error during server setup:', error);
+    process.exit(1);
   }
-});
-
-// Error handling middleware
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  log('Error middleware:', err);
-  res.status(err.status || 500).json({
-    error: {
-      message: err.message || 'Internal Server Error',
-      status: err.status || 500
-    }
-  });
-});
-
-// Add 404 handler - this must be last
-app.use((req: express.Request, res: express.Response) => {
-  log('=== 404 Not Found ===');
-  log('Request URL:', req.url);
-  log('Request Method:', req.method);
-  log('Request Headers:', JSON.stringify(req.headers, null, 2));
-  log('=== End 404 Not Found ===');
-  res.status(404).json({ message: `Cannot ${req.method} ${req.url}` });
-});
-
-// Start server
-const PORT = process.env.PORT || 10000;
-httpServer.listen(PORT, () => {
-  log(`Server running on port ${PORT}`);
-  log('Environment:', process.env.NODE_ENV);
-  log('MongoDB URI:', process.env.MONGODB_URI ? 'Set' : 'Not set');
-  log('JWT Secret:', process.env.JWT_SECRET ? 'Set' : 'Not set');
-  log('Cookie Secret:', process.env.COOKIE_SECRET ? 'Set' : 'Not set');
-});
-
-// Handle server errors
-httpServer.on('error', (error: Error) => {
-  log('Server error:', error);
+}).catch((error) => {
+  log('MongoDB connection error:', error);
+  process.exit(1);
 });
 
 // Export for testing
