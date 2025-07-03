@@ -9,6 +9,14 @@ import * as path from 'path';
 import * as os from 'os';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
+import connectDB from './config/database';
+import authRoutes from './routes/auth';
+import userRoutes from './routes/user';
+import examPaperRoutes from './routes/examPaper';
+import submissionRoutes from './routes/submission';
+import resultRoutes from './routes/result';
+import activityRoutes from './routes/activity';
+import subjectRoutes from './routes/subject';
 
 // Custom logger function
 const log = (...args: any[]) => {
@@ -137,7 +145,6 @@ app.use((req, res, next) => {
 });
 
 // Connect to MongoDB
-import connectDB from './config/database';
 connectDB();
 
 // Socket.io connection handling
@@ -168,14 +175,6 @@ app.get('/', (req, res) => {
 });
 
 // Import routes
-import authRoutes from './routes/auth';
-import userRoutes from './routes/user';
-import examPaperRoutes from './routes/examPaper';
-import submissionRoutes from './routes/submission';
-import resultRoutes from './routes/result';
-import activityRoutes from './routes/activity';
-import subjectRoutes from './routes/subject';
-
 log('=== Registering Routes ===');
 
 // API Routes with error handling
