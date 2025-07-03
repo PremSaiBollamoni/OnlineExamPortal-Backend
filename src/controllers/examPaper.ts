@@ -58,15 +58,33 @@ export const getExamPapers = async (req: AuthRequest, res: Response) => {
     if (req.user?.role === 'faculty') {
       query = { facultyId: req.user._id };
     } else if (req.user?.role === 'student') {
+      // Get student's details
+      const studentSemester = req.user.semester;
+      const studentDepartment = req.user.department;
+      const studentSpecialization = req.user.specialization;
+
+      console.log('Student details:', {
+        semester: studentSemester,
+        department: studentDepartment,
+        specialization: studentSpecialization
+      });
+
       // First get subjects for the student's semester
       const subjects = await Subject.find({
-        semester: req.user.semester,
-        department: req.user.department,
+        semester: studentSemester,
+        department: studentDepartment,
         $or: [
-          { specialization: req.user.specialization },
+          { specialization: studentSpecialization },
           { specialization: 'No Specialization' }
         ]
       });
+
+      console.log('Found subjects:', subjects.map(s => ({
+        id: s._id,
+        name: s.name,
+        semester: s.semester,
+        specialization: s.specialization
+      })));
 
       const subjectIds = subjects.map(subject => subject._id);
 
@@ -78,12 +96,16 @@ export const getExamPapers = async (req: AuthRequest, res: Response) => {
     }
     // Admin can see all papers (empty query)
 
+    console.log('Final query:', query);
+
     let examPapers = await ExamPaper.find(query)
       .populate({
         path: 'subject',
         select: 'name semester department specialization'
       })
       .populate('facultyId', 'name');
+
+    console.log('Found exam papers:', examPapers.length);
 
     // If student, check for submissions and filter/mark papers accordingly
     if (req.user?.role === 'student') {
@@ -96,20 +118,29 @@ export const getExamPapers = async (req: AuthRequest, res: Response) => {
       // Create a Set of submitted exam IDs for faster lookup
       const submittedExamIds = new Set(submissions.map(sub => sub.examPaper.toString()));
 
-      // Transform exam papers to include submission status
-      examPapers = examPapers.map(paper => {
-        const paperObj = paper.toObject();
-        paperObj.isSubmitted = submittedExamIds.has(paper._id.toString());
-        paperObj.isAvailable = !paperObj.isSubmitted && 
-                              paper.status === 'approved' && 
-                              (!paper.startTime || new Date(paper.startTime) <= new Date()) &&
-                              (!paper.endTime || new Date(paper.endTime) >= new Date());
-        return paperObj;
-      });
+      // Filter and transform exam papers
+      examPapers = examPapers
+        .filter(paper => {
+          // Ensure the paper's subject matches student's semester
+          const subjectSemester = paper.subject?.semester;
+          return subjectSemester === req.user?.semester;
+        })
+        .map(paper => {
+          const paperObj = paper.toObject();
+          paperObj.isSubmitted = submittedExamIds.has(paper._id.toString());
+          paperObj.isAvailable = !paperObj.isSubmitted && 
+                                paper.status === 'approved' && 
+                                (!paper.startTime || new Date(paper.startTime) <= new Date()) &&
+                                (!paper.endTime || new Date(paper.endTime) >= new Date());
+          return paperObj;
+        });
+
+      console.log('Filtered exam papers:', examPapers.length);
     }
 
     res.json(examPapers);
   } catch (error: unknown) {
+    console.error('Error in getExamPapers:', error);
     const apiError = error as ApiError;
     res.status(apiError.status || 500).json({ 
       message: apiError.message || 'Internal server error' 
